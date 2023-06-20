@@ -12,11 +12,11 @@ import matplotlib.pyplot as plt
 ENV_NAME = 'CartPole-v1'
 REPLAY_MEMORY_SIZE = 10_000 # size of deque used for memory
 MIN_REPLAY_MEMORY_SIZE = 1_000 # minimum amount of memory needed
-BATCH_SIZE = 32
-DISCOUNT = 0.99 # Ganna
+BATCH_SIZE = 128
+DISCOUNT = 0.99 # Gamma
 EPSILON = 1.0
 EPSILON_DECAY = 0.99
-EPSILON_MIN = 0.01
+EPSILON_MIN = 0.05
 TARGET_UPDATE_FREQ = 5
 EPISODES = 100
 graph_rewards = []
@@ -81,6 +81,7 @@ class DQNAgent:
         for idx, (state, action, reward, next_state, done) in enumerate(minibatch):
             target = reward  # target is the new q_value
 
+            # update q_values
             if not done:
                 next_q_values = np.max(future_qs_list[idx])
                 target += DISCOUNT * next_q_values
@@ -149,6 +150,7 @@ plt.show()
 # Test the trained agent
 state = env.reset()
 total_reward = 0
+agent.epsilon = 0
 
 while True:
     env.render()

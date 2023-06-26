@@ -19,7 +19,7 @@ LAYER1 = 128
 LAYER2 = 128
 DISCOUNT = 0.99
 LEARNING_RATE = 0.001
-EPISODES = 1000
+EPISODES = 500
 
 # Neural Net
 class NeuralNet(nn.Module):
@@ -67,8 +67,11 @@ def compute_returns(rewards: list, discount=DISCOUNT):
 # update to get the losses
 def update(returns, log_prob_actions, values, optimizer):
     returns = returns.detach()
-    policy_loss = - (returns * log_prob_actions).sum() # calculate the policy loss
-    value_loss = F.smooth_l1_loss(returns, values).sum() # calculate the value_loss
+    delta = returns - values
+    # policy_loss = - (returns * log_prob_actions).sum()
+    policy_loss = - (delta * log_prob_actions).sum() # calculate the policy loss
+    # value_loss = F.smooth_l1_loss(returns, values).sum() # calculate the value_loss
+    value_loss = (delta ** 2).sum()
     optimizer.zero_grad()
 
     total_loss = policy_loss + value_loss

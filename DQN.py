@@ -1,6 +1,7 @@
 import numpy as np
 import gym
 import random
+import matplotlib.pyplot as plt
 
 EPSILON = 1.0
 EPSILON_DECAY = 0.99
@@ -10,7 +11,7 @@ REPLAY_MEMORY_SIZE = 10_000
 BATCH_SIZE = 128
 LEARNING_RATE = 0.001
 TARGET_UPDATE_FREQUENCY = 5
-EPISODES = 100
+EPISODES = 200
 HIDDEN_LAYER1 = 64
 HIDDEN_LAYER2 = 64
 
@@ -35,11 +36,11 @@ class NeuralNetwork:
         def relu(i):
             return np.maximum(0, i)
 
-        self.z1 = np.dot(x, self.weights1) + self.bias1
-        self.a1 = relu(self.z1)
-        self.z2 = np.dot(self.a1, self.weights2) + self.bias2
-        self.a2 = relu(self.z2)
-        self.z3 = np.dot(self.a2, self.weights3) + self.bias3
+        self.z1 = np.dot(x, self.weights1) + self.bias1 # (1, 64)
+        self.a1 = relu(self.z1) # (1, 64)
+        self.z2 = np.dot(self.a1, self.weights2) + self.bias2 # (1, 64)
+        self.a2 = relu(self.z2) # (1, 64)
+        self.z3 = np.dot(self.a2, self.weights3) + self.bias3 # (1, 2)
 
         return self.z3
 
@@ -68,7 +69,6 @@ class NeuralNetwork:
         dL_dw1 = np.dot(x.T, dL_dz1)
         dL_db1 = dL_dz1
 
-               # 64-2,
         return [dL_dw3, dL_db3, dL_dw2, dL_db2, dL_dw1, dL_db1]
 
     def update_parameters(self, dw3, db3, dw2, db2, dw1, db1):
@@ -118,7 +118,24 @@ targetValFunc = NeuralNetwork(state_size, action_size, HIDDEN_LAYER1, HIDDEN_LAY
 targetValFunc.set_equal_parameters(actionValFunc)
 memory = ReplayMemory(REPLAY_MEMORY_SIZE)
 
+
+baseline_rewards = []
+for episode in range(EPISODES):
+    state = env.reset()
+    done = False
+    total_reward = 0
+    while not done:
+        action = np.argmax(actionValFunc.forward(state))
+        next_state, reward, done, _ = env.step(action)
+        total_reward += reward
+        state = next_state
+    baseline_rewards.append(total_reward)
+
+plt.plot(range(1, EPISODES + 1), baseline_rewards, 'r-')
+
+
 step_count = 0
+testing_rewards = []
 for episode in range(EPISODES):
     state = env.reset()
     done = False
@@ -166,6 +183,13 @@ for episode in range(EPISODES):
             targetValFunc.set_equal_parameters(actionValFunc)
 
         step_count += 1
+
+    print(total_reward)
+    testing_rewards.append(total_reward)
+
+
+plt.plot(range(1, EPISODES + 1), testing_rewards, 'b-')
+plt.show()
 
 
 env.close()

@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 EPSILON = 1.0
 EPSILON_DECAY = 0.995
 EPSILON_MIN = 0.05
+DISCOUNT = 0.99 # Gamma
 MIN_REPLAY_MEMORY_SIZE = 3_000
 REPLAY_MEMORY_SIZE = 10_000
 BATCH_SIZE = 256
@@ -169,7 +170,7 @@ for episode in range(EPISODES):
 
         gradients = {"w3": [], "b3": [], "w2": [], "b2": [], "w1": [], "b1" : []}
         for transition in minibatch:
-            y_j = transition[2] if transition[4] else transition[2] + np.max(targetValFunc.forward(transition[3]))
+            y_j = transition[2] if transition[4] else transition[2] + DISCOUNT * np.max(targetValFunc.forward(transition[3]))
             gradient = actionValFunc.backward(np.array([transition[0]]), y_j, transition[1])
             gradients["w3"].append(gradient[0].tolist())
             gradients["b3"].append(gradient[1].tolist())

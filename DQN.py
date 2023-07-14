@@ -1,221 +1,164 @@
-# import necessary packages
-import numpy as np
 import gym
-import random
-import matplotlib.pyplot as plt
+import numpy as np
+from collections import deque
 
-# define necessary constants and variables
-EPSILON = 1.0
-EPSILON_DECAY = 0.995
-EPSILON_MIN = 0.05
-DISCOUNT = 0.99 # Gamma
-MIN_REPLAY_MEMORY_SIZE = 3_000
-REPLAY_MEMORY_SIZE = 10_000
-BATCH_SIZE = 256
-LEARNING_RATE = 0.001
-TARGET_UPDATE_FREQUENCY = 5
-EPISODES = 300
-HIDDEN_LAYER1 = 64
-HIDDEN_LAYER2 = 64
+env = gym.make('CartPole-v1')
 
 
-# define the Neural Net Class
-class NeuralNetwork:
-    def __init__(self, input_size, output_size, hidden1, hidden2, lr=LEARNING_RATE):
-        self.input_size = input_size # input size
-        self.output_size = output_size # output size
-        self.hidden1 = hidden1 # hidden layer 1 size
-        self.hidden2 = hidden2 # hidden layer 2 size
-        self.lr = lr # learning rate
-
-        self.weights1 = np.random.randn(self.input_size, self.hidden1) * np.sqrt(2 / (self.input_size + self.output_size)) # (4, 64)
-        self.bias1 = np.zeros((1, self.hidden1)) # (1, 64)
-        self.weights2 = np.random.randn(self.hidden1, self.hidden2) * np.sqrt(2 / (self.input_size + self.output_size))# (64, 64)
-        self.bias2 = np.zeros((1, self.hidden2)) # (1, 64)
-        self.weights3 = np.random.randn(self.hidden2, self.output_size) * np.sqrt(2 / (self.input_size + self.output_size))# (64, 2)
-        self.bias3 = np.zeros((1, self.output_size)) # (1, 2)
-
-        self.z1, self.a1, self.z2, self.a2, self.z3 = None, None, None, None, None # set other outputs of layers to None
-
-    def forward(self, x):
-        # define rectified linear function
-        def relu(i):
-            return np.maximum(0, i)
-
-        self.z1 = np.dot(x, self.weights1) + self.bias1 # (1, 64)
-        self.a1 = relu(self.z1) # (1, 64)
-        self.z2 = np.dot(self.a1, self.weights2) + self.bias2 # (1, 64)
-        self.a2 = relu(self.z2) # (1, 64)
-        self.z3 = np.dot(self.a2, self.weights3) + self.bias3 # (1, 2)
-
-        return self.z3
-
-    def set_equal_parameters(self, otherNet):
-        self.weights1 = np.array([i for i in list(otherNet.weights1)])
-        self.bias1 = np.array([i for i in list(otherNet.bias1)])
-        self.weights2 = np.array([i for i in list(otherNet.weights2)])
-        self.bias2 = np.array([i for i in list(otherNet.bias2)])
-        self.weights3 = np.array([i for i in list(otherNet.weights3)])
-        self.bias3 = np.array([i for i in list(otherNet.bias3)])
+def relu(mat):
+    return np.multiply(mat, (mat > 0))
 
 
-    def backward(self, x, y_j, action_taken):
-        def relu_derivative(i):
-            return np.where(i > 0, 1, 0)
-
-        self.forward(x)
-        dL_dz3 = np.array([[0, -2 * (y_j - self.z3[0][1])]]) if action_taken == 1 else np.array([[-2 * (y_j - self.z3[0][0]), 0]]) # (1, 2)
-        dL_dw3 = np.dot(self.a2.T, dL_dz3) # (64, 2)
-        dL_db3 = np.array(dL_dz3) # (1, 2)
-
-        dL_dz2 = np.dot(dL_dz3, self.weights3.T) * relu_derivative(self.z2) # (1, 64)
-        dL_dw2 = np.dot(dL_dz2.T, self.a1).T # (64, 64)
-        dL_db2 = dL_dz2 # (1, 64)
-
-        dL_dz1 = np.dot(dL_dz2, self.weights2.T) * relu_derivative(self.z1) # (1, 64)
-        dL_dw1 = np.dot(dL_dz1.T, x).T # (4, 64)
-        dL_db1 = dL_dz1 # (1, 64)
-
-        return [dL_dw3, dL_db3, dL_dw2, dL_db2, dL_dw1, dL_db1]
-
-    def update_parameters(self, dw3, db3, dw2, db2, dw1, db1):
-        self.weights3 -= self.lr * dw3
-        self.bias3 -= self.lr * db3
-        self.weights2 -= self.lr * dw2
-        self.bias2 -= self.lr * db2
-        self.weights1 -= self.lr * dw1
-        self.bias1 -= self.lr * db1
+def relu_derivative(mat):
+    return (mat > 0) * 1
 
 
-class ReplayMemory:
-    def __init__(self, size):
-        self.size = size
-        self.memory = []
-        self.count = 0
+class NNLayer:
+    # class representing a neural net layer
+    def __init__(self, input_size, output_size, activation=None, lr=0.001):
+        self.input_size = input_size
+        self.output_size = output_size
+        self.weights = np.random.uniform(low=-0.5, high=0.5, size=(input_size, output_size))
+        self.stored_weights = np.copy(self.weights)
+        self.activation_function = activation
+        self.lr = lr
+        self.m = np.zeros((input_size, output_size))
+        self.v = np.zeros((input_size, output_size))
+        self.beta_1 = 0.9
+        self.beta_2 = 0.999
+        self.time = 1
+        self.adam_epsilon = 0.00000001
 
-    def append(self, transition):
-        if self.count < self.size:
-            self.memory.append(transition)
+    # Compute the forward pass for this layer
+    def forward(self, inputs, remember_for_backprop=True):
+        # inputs has shape batch_size x layer_input_size
+        input_with_bias = np.append(inputs, 1)
+        unactivated = None
+        if remember_for_backprop:
+            unactivated = np.dot(input_with_bias, self.weights)
         else:
-            self.memory[self.count % self.size] = transition
-        self.count += 1
+            unactivated = np.dot(input_with_bias, self.stored_weights)
+        # store variables for backward pass
+        output = unactivated
+        if self.activation_function != None:
+            # assuming here the activation function is relu, this can be made more robust
+            output = self.activation_function(output)
+        if remember_for_backprop:
+            self.backward_store_in = input_with_bias
+            self.backward_store_out = np.copy(unactivated)
+        return output
 
-    def getMemory(self):
-        return self.memory
+    def update_weights(self, gradient):
+        m_temp = np.copy(self.m)
+        v_temp = np.copy(self.v)
 
-    def returnBatch(self, batch_size):
-        if len(self.memory) < MIN_REPLAY_MEMORY_SIZE:
-            return None
-        minibatch = random.sample(self.memory, batch_size)
-        return minibatch
+        m_temp = self.beta_1 * m_temp + (1 - self.beta_1) * gradient
+        v_temp = self.beta_2 * v_temp + (1 - self.beta_2) * (gradient * gradient)
+        m_vec_hat = m_temp / (1 - np.power(self.beta_1, self.time + 0.1))
+        v_vec_hat = v_temp / (1 - np.power(self.beta_2, self.time + 0.1))
+        self.weights = self.weights - np.divide(self.lr * m_vec_hat, np.sqrt(v_vec_hat) + self.adam_epsilon)
 
+        self.m = np.copy(m_temp)
+        self.v = np.copy(v_temp)
 
-# Create the environment
-env = gym.make("CartPole-v1")
+    def update_stored_weights(self):
+        self.stored_weights = np.copy(self.weights)
 
-# Observation Space: cart position, cart velocity, pole angle, pole angular velocity
-state_size = env.observation_space.shape[0]
-action_size = env.action_space.n
+    def update_time(self):
+        self.time = self.time + 1
 
-print(env.observation_space.high) # [4.8000002e+00 3.4028235e+38 4.1887903e-01 3.4028235e+38]
-print(env.observation_space.low) # [-4.8000002e+00 -3.4028235e+38 -4.1887903e-01 -3.4028235e+38]
-
-actionValFunc = NeuralNetwork(state_size, action_size, HIDDEN_LAYER1, HIDDEN_LAYER2)
-targetValFunc = NeuralNetwork(state_size, action_size, HIDDEN_LAYER1, HIDDEN_LAYER2)
-targetValFunc.set_equal_parameters(actionValFunc)
-memory = ReplayMemory(REPLAY_MEMORY_SIZE)
-
-
-baseline_rewards = []
-for episode in range(EPISODES):
-    state = env.reset()
-    done = False
-    total_reward = 0
-    while not done:
-        action = np.argmax(actionValFunc.forward(state))
-        next_state, reward, done, _ = env.step(action)
-        total_reward += reward
-        state = next_state
-    baseline_rewards.append(total_reward)
-
-plt.plot(range(1, EPISODES + 1), baseline_rewards, 'k-')
-print(f"Average Pre-Training Reward: {np.mean(baseline_rewards)}")
+    def backward(self, gradient_from_above):
+        adjusted_mul = gradient_from_above
+        # this is pointwise
+        if self.activation_function != None:
+            adjusted_mul = np.multiply(relu_derivative(self.backward_store_out), gradient_from_above)
+        D_i = np.dot(np.transpose(np.reshape(self.backward_store_in, (1, len(self.backward_store_in)))),
+                     np.reshape(adjusted_mul, (1, len(adjusted_mul))))
+        delta_i = np.dot(adjusted_mul, np.transpose(self.weights))[:-1]
+        self.update_weights(D_i)
+        return delta_i
 
 
-step_count = 0
-testing_rewards = []
-for episode in range(EPISODES):
-    state = env.reset()
-    done = False
-    total_reward = 0
-    while not done:
-        # get action
-        if np.random.rand() <= EPSILON:
-            action = np.random.choice(action_size)
+class RLAgent:
+    # class representing a reinforcement learning agent
+    env = None
+
+    def __init__(self, env, num_hidden_layers=2, hidden_size=24, gamma=0.95, epsilon_decay=0.997, epsilon_min=0.01):
+        self.env = env
+        self.hidden_size = hidden_size
+        self.input_size = env.observation_space.shape[0]
+        self.output_size = env.action_space.n
+        self.num_hidden_layers = num_hidden_layers
+        self.epsilon = 1.0
+        self.epsilon_decay = 0.997
+        self.epsilon_min = epsilon_min
+        self.memory = deque([], 1000000)
+        self.gamma = gamma
+
+        self.layers = [
+            NNLayer(self.input_size + 1, self.hidden_size, activation=relu),
+            NNLayer(self.hidden_size + 1, self.hidden_size, activation=relu),
+            NNLayer(self.hidden_size + 1, self.output_size)
+        ]
+
+    def select_action(self, observation):
+        values = self.forward(np.asmatrix(observation))
+        if (np.random.random() > self.epsilon):
+            return np.argmax(values)
         else:
-            action = np.argmax(actionValFunc.forward(state))
-        # update epsilon
-        EPSILON = np.maximum(EPSILON * EPSILON_DECAY, EPSILON_MIN)
+            return np.random.randint(self.env.action_space.n)
 
-        next_state, reward, done, _ = env.step(action)
-        total_reward += reward
-        memory.append((state, action, reward, next_state, done))
+    def forward(self, observation, remember_for_backprop=True):
+        vals = np.copy(observation)
+        index = 0
+        for layer in self.layers:
+            vals = layer.forward(vals, remember_for_backprop)
+            index = index + 1
+        return vals
 
-        minibatch = memory.returnBatch(BATCH_SIZE)
+    def remember(self, done, action, observation, prev_obs):
+        self.memory.append([done, action, observation, prev_obs])
 
-        if minibatch is None:
-            step_count += 1
-            state = next_state
-            continue
+    def experience_replay(self, update_size=20):
+        if (len(self.memory) < update_size):
+            return
+        else:
+            batch_indices = np.random.choice(len(self.memory), update_size)
+            for index in batch_indices:
+                done, action_selected, new_obs, prev_obs = self.memory[index]
+                action_values = self.forward(prev_obs, remember_for_backprop=True)
+                next_action_values = self.forward(new_obs, remember_for_backprop=False)
+                experimental_values = np.copy(action_values)
+                if done:
+                    experimental_values[action_selected] = -1
+                else:
+                    experimental_values[action_selected] = 1 + self.gamma * np.max(next_action_values)
+                self.backward(action_values, experimental_values)
+        self.epsilon = self.epsilon if self.epsilon < self.epsilon_min else self.epsilon * self.epsilon_decay
+        for layer in self.layers:
+            layer.update_time()
+            layer.update_stored_weights()
 
-        gradients = {"w3": [], "b3": [], "w2": [], "b2": [], "w1": [], "b1" : []}
-        for transition in minibatch:
-            y_j = transition[2] if transition[4] else transition[2] + DISCOUNT * np.max(targetValFunc.forward(transition[3]))
-            gradient = actionValFunc.backward(np.array([transition[0]]), y_j, transition[1])
-            gradients["w3"].append(gradient[0].tolist())
-            gradients["b3"].append(gradient[1].tolist())
-            gradients["w2"].append(gradient[2].tolist())
-            gradients["b2"].append(gradient[3].tolist())
-            gradients["w1"].append(gradient[4].tolist())
-            gradients["b1"].append(gradient[5].tolist())
+    def backward(self, calculated_values, experimental_values):
+        # values are batched = batch_size x output_size
+        delta = (calculated_values - experimental_values)
 
-        dw3, db3 = np.mean(np.array(gradients["w3"]), axis=0), np.mean(np.array(gradients["b3"]), axis=0)
-        dw2, db2 = np.mean(np.array(gradients["w2"]), axis=0), np.mean(np.array(gradients["b2"]), axis=0)
-        dw1, db1 = np.mean(np.array(gradients["w1"]), axis=0), np.mean(np.array(gradients["b1"]), axis=0)
-
-        actionValFunc.update_parameters(dw3, db3, dw2, db2, dw1, db1)
-
-        state = next_state
-
-        if step_count % TARGET_UPDATE_FREQUENCY == 0:
-            targetValFunc.set_equal_parameters(actionValFunc)
-
-        step_count += 1
-
-    print(total_reward)
-    testing_rewards.append(total_reward)
+        for layer in reversed(self.layers):
+            delta = layer.backward(delta)
 
 
-plt.plot(range(1, EPISODES + 1), testing_rewards, 'b-')
-plt.show()
+# Global variables
+NUM_EPISODES = 10000
+MAX_TIMESTEPS = 1000
+AVERAGE_REWARD_TO_SOLVE = 195
+NUM_EPS_TO_SOLVE = 100
+NUM_RUNS = 20
+GAMMA = 0.95
+EPSILON_DECAY = 0.997
+update_size = 10
+hidden_layer_size = 24
+num_hidden_layers = 2
+model = RLAgent(env, num_hidden_layers, hidden_layer_size, GAMMA, EPSILON_DECAY)
+scores_last_timesteps = deque([], NUM_EPS_TO_SOLVE)
 
 
-print(f"Average Pre-Training Reward: {np.mean(baseline_rewards)}")
-
-baseline_rewards = []
-for episode in range(EPISODES):
-    state = env.reset()
-    done = False
-    total_reward = 0
-    while not done:
-        action = np.argmax(actionValFunc.forward(state))
-        next_state, reward, done, _ = env.step(action)
-        total_reward += reward
-        state = next_state
-    baseline_rewards.append(total_reward)
-
-plt.plot(range(1, EPISODES + 1), baseline_rewards, 'k-')
-print(f"Average Post-Training Reward: {np.mean(baseline_rewards)}")
-
-
-env.close()

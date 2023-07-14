@@ -108,6 +108,10 @@ class RLAgent:
         else:
             return np.random.randint(self.env.action_space.n)
 
+    def select_action_for_test(self, observation):
+        values = self.forward(np.asmatrix(observation))
+        return np.argmax(values)
+
     def forward(self, observation, remember_for_backprop=True):
         vals = np.copy(observation)
         index = 0
@@ -141,15 +145,15 @@ class RLAgent:
 
     def backward(self, calculated_values, experimental_values):
         # values are batched = batch_size x output_size
-        delta = (calculated_values - experimental_values)
+        delta = (calculated_values - experimental_values) ** 2
 
         for layer in reversed(self.layers):
             delta = layer.backward(delta)
 
 
 # Global variables
-NUM_EPISODES = 10000
-MAX_TIMESTEPS = 1000
+NUM_EPISODES = 1_000
+MAX_TIMESTEPS = 1_000
 AVERAGE_REWARD_TO_SOLVE = 195
 NUM_EPS_TO_SOLVE = 100
 NUM_RUNS = 20
@@ -159,6 +163,40 @@ update_size = 10
 hidden_layer_size = 24
 num_hidden_layers = 2
 model = RLAgent(env, num_hidden_layers, hidden_layer_size, GAMMA, EPSILON_DECAY)
-scores_last_timesteps = deque([], NUM_EPS_TO_SOLVE)
+
+rewards_test = []
+
+for episode in range(100):
+    state = env.reset()
+    total_rewards = 0
+    for t in range(MAX_TIMESTEPS):
+        env.render()
+        action = model.select_action_for_test(state)
+        new_state, reward, done, _ = env.step(action)
+        total_rewards += reward
+        if done:
+            print(f'Episode {episode} ended after {t + 1} timesteps')
+            rewards_test.append(total_rewards)
+            break
+
+print(f'Average episode reward was {np.mean(np.array(rewards_test))}')
+
+
+
+for i_episode in range(NUM_EPISODES):
+    state = env.reset()
+    total_rewards = 0
+    for t in range(MAX_TIMESTEPS):
+        action = model.select_action(state)
+        new_state, reward, done, _ = env.step(action)
+        model.remember(done, action, new_state, state)
+        model.experience_replay(20)
+        model.epsilon = model.epsilon if model.epsilon < 0.01 else model.epsilon * 0.995
+        if done:
+            print('Episode {} ended after {} timesteps, current exploration is {}'.format(i_episode, t + 1,
+                                                                                          model.epsilon))
+            break
+
+env.close()
 
 

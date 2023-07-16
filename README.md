@@ -1,4 +1,4 @@
-# Notes about Implementation of Reinforcement Learning Algorithms Implemented
+# Notes about Implemented Reinforcement Learning Algorithms
 
 ## Deep Q_Network
 

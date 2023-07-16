@@ -24,5 +24,6 @@ Initialize target action-value function $\hat{Q}$ with weights $\theta^{-}=\thet
 <br>
 ### Results <br>
 We first initialized a neural net to use for the deep q-network algorithm and ran it to see the average rewards per episode of this initialized, non-learned net. Next we started the training of the neural net for the deep q-network to update the weights to minimize the loss function from the pseudocode above. We stopped the training once it hit an average reward per episode of 200 for the last 100 episodes. The graph below shows the rewards collected per episode during the training process along with the average reward per episode before training and after training. <br>
+![DQN](DQN_Result.png)
 
 

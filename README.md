@@ -7,7 +7,7 @@
 Initialize replay memory $D$ to capacity $N$ <br>
 Initialize action-value function $Q$ with random weights $\theta$ <br>
 Initialize target action-value function $\hat{Q}$ with weights $\theta^{-}=\theta$ <br>
-**For** episode=$1, M$ **do** <br>
+**For** episode=1, M **do** <br>
 &nbsp;&nbsp;&nbsp;&nbsp; Initialize sequence $s_1={x_1}$ and preprocessed sequence $\phi_1=\phi(s_1)$<br>
 &nbsp;&nbsp;&nbsp;&nbsp; **For** $t=1, T$ **do** <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; With probability $\epsilon$ select a random action $a_t$ <br>

@@ -97,11 +97,13 @@ class RLAgent:
         self.input_size = env.observation_space.shape[0]
         self.output_size = env.action_space.n
         self.num_hidden_layers = num_hidden_layers
-        self.epsilon = 1.0
+        self.epsilon = 1.0 # STARTING EPSILON
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
         self.memory = deque([], 1000000)
         self.gamma = gamma
+        self.time = 1
+        self.update_every = 5
 
         self.layers = [
             NNLayer(self.input_size + 1, self.hidden_size, activation=relu),
@@ -149,11 +151,13 @@ class RLAgent:
         self.epsilon = self.epsilon if self.epsilon < self.epsilon_min else self.epsilon * self.epsilon_decay
         for layer in self.layers:
             layer.update_time()
-            layer.update_stored_weights()
+            if self.time % self.update_every == 0:
+                layer.update_stored_weights()
+            self.time += 1
 
     def backward(self, calculated_values, experimental_values):
         # values are batched = batch_size x output_size
-        delta = (calculated_values - experimental_values)
+        delta = 2 * (calculated_values - experimental_values) # Gradient of Loss Function
 
         for layer in reversed(self.layers):
             delta = layer.backward(delta)
@@ -162,16 +166,16 @@ class RLAgent:
 
 
 # Global variables
-NUM_EPISODES = 10_000
-MAX_TIMESTEPS = 1_000
-AVERAGE_REWARD_TO_SOLVE = 195
-NUM_EPS_TO_SOLVE = 100
-NUM_RUNS = 20
-GAMMA = 0.95
-EPSILON_DECAY = 0.997
-update_size = 10
-hidden_layer_size = 24
-num_hidden_layers = 2
+NUM_EPISODES = 10_000 # NUMBER OF EPISODES
+MAX_TIMESTEPS = 1_000 # MAXIMUM NUMBERS OF STEPS PER EPISODE
+AVERAGE_REWARD_TO_SOLVE = 200 # AVERAGE REWARD PER EPISODE NEEDED TO CONSIDER ENVIRONNMENT SOLVED
+NUM_EPS_TO_SOLVE = 100 # THE ROLLING AVERAGE OF THE LAST NUMBER OF EPISODES THAT WE WILL LOOK AT
+GAMMA = 0.95 # DISCOUNT
+EPSILON_DECAY = 0.997 # DECAY RATIO OF EPSILON-GREEDY
+update_size = 20 # REPLAY BUFFER SIZE
+hidden_layer_size = 64 # SIZE OF HIDDEN LAYERS
+num_hidden_layers = 2 # NUMBER OF HIDDEN LAYERS IN NEURAL NET
+
 model = RLAgent(env, num_hidden_layers, hidden_layer_size, GAMMA, EPSILON_DECAY)
 scores_last_timesteps = deque([], NUM_EPS_TO_SOLVE)
 
@@ -181,13 +185,11 @@ train_rewards = []
 for i_episode in range(100):
     observation = env.reset()
     total_rewards = 0
-    for t in range(1000):
+    for t in range(MAX_TIMESTEPS):
         action = model.select_action_for_benchmark(observation)
         prev_obs = observation
         observation, reward, done, info = env.step(action)
         total_rewards += reward
-        model.remember(done, action, observation, prev_obs)
-        model.experience_replay(update_size)
         if done:
             # If the pole has tipped over, end this episode
             print('Episode {} ended with total reward of {}'.format(i_episode, total_rewards))
@@ -235,6 +237,9 @@ plt.plot(range(len(test_rewards)), [np.mean(np.array(train_rewards)) for _ in ra
 plt.plot(range(len(test_rewards)), [AVERAGE_REWARD_TO_SOLVE for _ in range(len(test_rewards))],
          linestyle='--', color="gold", alpha=0.5, label='Target Post- Avg Rewards')
 plt.legend(loc="upper left")
+plt.xlabel("Episodes")
+plt.ylabel("Rewards")
+plt.title("Rewards over Episodes during Training")
 plt.show()
 
 

@@ -1,150 +1,140 @@
+# import necessary packages
 import gym
 import numpy as np
 
-LEARNING_RATE = 0.001
-EPISODES = 300
-HIDDEN_LAYER1 = 64
-HIDDEN_LAYER2 = 64
-DISCOUNT = 0.99
-LEARNING_RATE = 0.001
-i = [2, 3]
+env = gym.make("CartPole-v1")
 
-class NeuralNetwork:
-    def __init__(self, input_size, output_size, hidden1, hidden2, lr=LEARNING_RATE):
-        self.input_size = input_size  # input size
-        self.output_size = output_size  # output size
-        self.hidden1 = hidden1  # hidden layer 1 size
-        self.hidden2 = hidden2  # hidden layer 2 size
-        self.lr = lr  # learning rate
+def relu(mat):
+    return np.multiply(mat, (mat > 0))
 
-        self.weights1 = np.random.randn(self.input_size, self.hidden1) * np.sqrt(
-            2 / (self.input_size + self.output_size))  # (4, 64)
-        self.bias1 = np.zeros((1, self.hidden1))  # (1, 64)
-        self.weights2 = np.random.randn(self.hidden1, self.hidden2) * np.sqrt(
-            2 / (self.input_size + self.output_size))  # (64, 64)
-        self.bias2 = np.zeros((1, self.hidden2))  # (1, 64)
-        self.weights3 = np.random.randn(self.hidden2, self.output_size) * np.sqrt(
-            2 / (self.input_size + self.output_size))  # (64, 2)
-        self.bias3 = np.zeros((1, self.output_size))  # (1, 2)
-
-        self.z1, self.a1, self.z2, self.a2, self.z3, self.action_probs = None, None, None, None, None, None
+def relu_derivative(mat):
+    return (mat > 0) * 1
 
 
-    def forward(self, x):
-        # define rectified linear function
-        def relu(i):
-            return np.maximum(0, i)
+class NNLayer:
+    def __init__(self, input_size, output_size, activation=None, lr=0.001):
+        self.input_size = input_size
+        self.output_size = output_size
 
-        self.z1 = np.dot(x, self.weights1) + self.bias1 # (1, 64)
-        self.a1 = relu(self.z1) # (1, 64)
-        self.z2 = np.dot(self.a1, self.weights2) + self.bias2 # (1, 64)
-        self.a2 = relu(self.z2) # (1, 64)
-        self.z3 = np.dot(self.a2, self.weights3) + self.bias3 # (1, 2)
+        self.weights = np.random.uniform(low=-0.5, high=0.5, size=(input_size, output_size))  # initialize weights
+        self.activation_function = activation
 
-        self.action_probs = np.exp(self.z3) / np.sum(np.exp(self.z3), axis=1, keepdims=True)
+        self.lr = lr
 
-        return self.action_probs
+    def forward(self, inputs, remember_for_backprop=True):
+        input_with_bias = np.append(inputs, 1)
+        unactivated = None
+        unactivated = np.dot(input_with_bias, self.weights)
+        output = unactivated
+        if self.activation_function != None:
+            output = self.activation_function(output)
+        if remember_for_backprop:
+            self.backward_store_in = input_with_bias
+            self.backward_store_out = np.copy(unactivated)
+        return output
 
-    def select_action(self, probs):
-        r = np.random.rand()
-        if r < probs[0]:
+    def update_weights(self, gradient, gamma, cumulated_reward, t):
+        self.weights += self.lr * (gamma ** t) * cumulated_reward * gradient
+
+
+    def backward(self, gradient_from_above, gamma, cumulated_return, t):
+        adjusted_mul = gradient_from_above
+        if self.activation_function == None:
+            adjusted_mul = np.multiply(relu_derivative(self.backward_store_out), gradient_from_above)
+        D_i = np.dot(np.transpose(np.reshape(self.backward_store_in, (1, len(self.backward_store_in)))),
+                     np.reshape(adjusted_mul, (1, len(adjusted_mul))))
+        delta_i = np.dot(adjusted_mul, np.transpose(self.weights))[:-1]
+        self.update_weights(D_i, gamma, cumulated_return, t)
+        return delta_i
+
+
+class RLAgent:
+    env = None
+    def __init__(self, env, num_hidden_layers=2, hidden_size=24, gamma=0.95):
+        self.env = env
+        self.hidden_size = hidden_size
+        self.input_size = env.observation_space.shape[0]
+        self.output_size = env.action_space.n
+        self.num_hidden_layers = num_hidden_layers
+        self.gamma = gamma
+        self.layers = [
+            NNLayer(self.input_size + 1, self.hidden_size, activation=relu),
+            NNLayer(self.hidden_size + 1, self.hidden_size, activation=relu),
+            NNLayer(self.hidden_size + 1, self.output_size)
+        ]
+
+    def select_action(self, observation):
+        values = self.forward(np.asmatrix(observation), False)
+        action_prob = np.exp(values - np.max(values)) / np.sum(np.exp(values - np.max(values)))
+        if np.random.random() < action_prob[0]:
             return 0
         return 1
 
-    def calculate_gradient_log_probs(self, x, a):
-        action_probs = self.forward(x)
+    def get_returns(self, rewards_list):
+        returns = []
+        G = 0
+        for r in reversed(rewards_list):
+            G = r + self.gamma * G
+            returns.insert(0, G)
+        return returns
 
-        # Calculate ∇a log π(a|s)
-        grad_log_probs = np.zeros_like(self.action_probs)
-        grad_log_probs[0, a] = 1 / self.action_probs[0, a]
+    def forward(self, observation, remember_for_backprop=True):
+        vals = np.copy(observation)
+        index = 0
+        for layer in self.layers:
+            vals = layer.forward(vals, remember_for_backprop)
+            index = index + 1
+        return vals
 
-        # Backpropagation to calculate ∇θ a
-        grad_a3 = grad_log_probs
-        grad_weights3 = np.dot(self.a2.T, grad_a3)
-        grad_bias3 = np.sum(grad_a3, axis=0, keepdims=True)
-        grad_a2 = np.dot(grad_a3, self.weights3.T)
-        grad_z2 = np.multiply(grad_a2, np.where(self.z2 > 0, 1, 0))
-        grad_weights2 = np.dot(self.a1.T, grad_z2)
-        grad_bias2 = np.sum(grad_z2, axis=0, keepdims=True)
-        grad_a1 = np.dot(grad_z2, self.weights2.T)
-        grad_z1 = np.multiply(grad_a1, np.where(self.z1 > 0, 1, 0))
-        grad_weights1 = np.dot(x.T, grad_z1)
-        grad_bias1 = np.sum(grad_z1, axis=0, keepdims=True)
+    def backward(self, observation, action, cumulated_return, t):
+        values = self.forward(np.asmatrix(observation), True)
+        delta = np.zeros_like(values)
+        delta[action] = 1 / values[action]
 
-        # Gradients ∇θ log π(a|s)
-        gradients = {
-            'weights1': grad_weights1,
-            'bias1': grad_bias1,
-            'weights2': grad_weights2,
-            'bias2': grad_bias2,
-            'weights3': grad_weights3,
-            'bias3': grad_bias3
-        }
-
-        return self.z3, gradients
-
-
-def calculate_cumulative_rewards(rewards):
-    G_t = [rewards[-1]]
-    idx = len(rewards) - 2
-    while idx >= 0:
-        G_t.insert(0, G_t[0] * DISCOUNT + rewards[idx])
-        idx -= 1
-    return np.array(G_t)
-
-
-# Create the environment
-env = gym.make("CartPole-v1")
-
-# Observation Space: cart position, cart velocity, pole angle, pole angular velocity
-state_size = env.observation_space.shape[0]
-action_size = env.action_space.n
-
-print(env.observation_space.high) # [4.8000002e+00 3.4028235e+38 4.1887903e-01 3.4028235e+38]
-print(env.observation_space.low) # [-4.8000002e+00 -3.4028235e+38 -4.1887903e-01 -3.4028235e+38]
-
-
-net = NeuralNetwork(state_size, action_size, HIDDEN_LAYER1, HIDDEN_LAYER2)
-
-
-for episode in range(EPISODES):
-    state = env.reset()
-    done = False
-
-    states = [state]
-    actions = []
-    rewards = []
-    z3s = []
-    gradients = []
-
-    while not done:
-        action_prob = net.forward(state)
-        action = net.select_action(action_prob[0])
-        next_state, reward, done, _ = env.step(action)
-
-        actions.append(action)
-        rewards.append(reward)
-        states.append(next_state)
-        z3, gradient = net.calculate_gradient_log_probs(np.array([state]), action)
-        z3s.append(z3)
-        gradients.append(gradient)
-
-        state = next_state
-
-    if episode == 0:
-        print(gradients[-1]["weights1"])
-    if episode == EPISODES - 1:
-        print(gradients[-1]["weights1"])
-
-    cumulated_rewards = calculate_cumulative_rewards(rewards)
-    for idx in range(len(cumulated_rewards)):
-        net.weights1 += LEARNING_RATE * DISCOUNT ** (idx + 1) * cumulated_rewards[idx] * gradients[idx]["weights1"]
-        net.bias1 += LEARNING_RATE * DISCOUNT ** (idx + 1) * cumulated_rewards[idx] * gradients[idx]["bias1"]
-        net.weights2 += LEARNING_RATE * DISCOUNT ** (idx + 1) * cumulated_rewards[idx] * gradients[idx]["weights2"]
-        net.bias2 += LEARNING_RATE * DISCOUNT ** (idx + 1) * cumulated_rewards[idx] * gradients[idx]["bias2"]
-        net.weights3 += LEARNING_RATE * DISCOUNT ** (idx + 1) * cumulated_rewards[idx] * gradients[idx]["weights3"]
-        net.bias3 += LEARNING_RATE * DISCOUNT ** (idx + 1) * cumulated_rewards[idx] * gradients[idx]["bias3"]
+        for layer in reversed(self.layers):
+            delta = layer.backward(delta, self.gamma, cumulated_return, t)
 
 
 
+
+NUM_EPISODES = 10_000
+MAX_TIMESTEPS = 1_000
+GAMMA = 0.95
+hidden_layer_size = 64
+num_hidden_layers = 2
+
+model = RLAgent(env, num_hidden_layers, hidden_layer_size, GAMMA)
+
+for i_episode in range(NUM_EPISODES):
+    rewards_list = []
+    actions_list = []
+    states_list = []
+    observation = env.reset()
+    states_list.append(observation)
+    for t in range(MAX_TIMESTEPS):
+        action = model.select_action(observation)
+        prev_obs = observation
+        observation, reward, done, info = env.step(action)
+        rewards_list.append(reward)
+        actions_list.append(action)
+        states_list.append(observation)
+        if done:
+            print('Episode {} ended with total reward of {}'.format(i_episode, t))
+            break
+
+    G_t = model.get_returns(rewards_list)
+    for i in range(len(G_t)):
+        prev_obs, observation, action, reward = states_list[i], states_list[i + 1], actions_list[i], G_t[i]
+        model.backward(prev_obs, action, reward, i + 1)
+
+
+observation = env.reset()
+for t in range(MAX_TIMESTEPS):
+    action = model.select_action(observation)
+    prev_obs = observation
+    observation, reward, done, info = env.step(action)
+    if done:
+        break
+
+print("Done")
 

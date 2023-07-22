@@ -199,6 +199,8 @@ for i_episode in range(100):
 print('Average reward before training was {}'.format(np.mean(np.array(train_rewards))))
 
 
+AVERAGE_REWARD_TO_SOLVE = max(AVERAGE_REWARD_TO_SOLVE, 2.5 * np.mean(np.array(train_rewards)))
+
 
 # The main program loop
 test_rewards = []

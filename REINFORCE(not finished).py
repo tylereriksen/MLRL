@@ -27,6 +27,7 @@ class NeuralNet(nn.Module):
         return action
 
     def get_log_prob_gradient(self, state, action):
+
         # Pass state through the neural network
         output = self.forward(state)
 
@@ -75,7 +76,7 @@ hidden_size = 64
 policy_net = NeuralNet(input_size, hidden_size, output_size)
 
 
-for episode in range(25):
+for episode in range(100):
     done = False
     state = env.reset()
     state = torch.from_numpy(np.array(state)).float()
@@ -93,7 +94,7 @@ for episode in range(25):
         episode_rewards.append(reward)
         episode_actions.append(action)
         episode_states.append(new_state)
-        new_state = state
+        state = new_state
 
     discounted_values = calculate_cumulative_rewards(episode_rewards)
     for i in range(len(episode_actions)):
@@ -107,10 +108,10 @@ for episode in range(25):
             for param, gradient in zip(policy_net.parameters(), gradients):
                 param += LEARNING_RATE * (DISCOUNT ** (i + 1)) * curr_update_reward * gradient
     print(f'Total Reward for Episode {episode} was {total_rewards}')
-    print(f'States were {str(episode_states)}')
-    print(f'Rewards were {str(episode_rewards)}')
-    print(f'Actions were {str(episode_actions)}')
-    print()
+    #print(f'States were {str(episode_states)}')
+    #print(f'Rewards were {str(episode_rewards)}')
+    #print(f'Actions were {str(episode_actions)}')
+    #print()
 
 
 env.close()

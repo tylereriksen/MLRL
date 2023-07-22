@@ -26,6 +26,9 @@ Initialize target action-value function $\hat{Q}$ with weights $\theta^{-}=\thet
 We first initialized a neural net to use for the deep q-network algorithm and ran it to see the average rewards per episode of this initialized, non-learned net. Next we started the training of the neural net for the deep q-network to update the weights to minimize the loss function from the pseudocode above. While doing so, we updated the target network to match the same weight parameters as the network we use to train every so often, in regular intervals. We stopped the training once it hit an average reward per episode of 200 for the last 100 episodes. The graph below shows the rewards collected per episode during the training process along with the average reward per episode before training and after training. <br>
 ![DQN](DQN_Result.png) <br>
 <br>
+### Additional Notes <br>
+Although in the graph shown above, there seems to be a very quick learning process towards the intended target average rewards, this is not always the case. Running with the same hyperparameters gives a decently fast convergence towards the intended target average rewards (< 200 episodes), but other times, the network seems to get stuck in a local minimum and unable to get out within the set episode limit. <br>
+<br>
 <br>
 ## REINFORCE Monte-Carlo Policy Gradient <br>
 
@@ -35,12 +38,15 @@ Initialize $\theta$ at random <br>
 Generate one episode $S_1, A_1, R_2, S_2, A_2, \cdots, S_T$ <br>
 **For** t= $1, T$ **do** <br>
 &nbsp;&nbsp;&nbsp;&nbsp; Estimate the return $G_t$ since the time step $t$ <br>
-&nbsp;&nbsp;&nbsp;&nbsp; $\theta \leftarrow \theta + \alpha \gamma^t G_t \nabla ln \pi(A_t|S_t, \theta)$
+&nbsp;&nbsp;&nbsp;&nbsp; $\theta \leftarrow \theta + \alpha \gamma^t G_t \nabla ln \pi(A_t|S_t, \theta)$ <br>
 **End For** <br>
 <br>
 ### Results <br>
 We first initialized a neural net to use for the REINFORCE algorithm and ran it to see the average rewards per episode of this initialized, non-learned net. Next we started the training of the neural net for the REINFORCE algorithm and updated the weights by the equation in the pseudocode above. We stopped the training once it hit an average reward per episode of 200 for the last 100 episodes. The graph below shows the rewards collected per episode during the training process along with the average reward per episode before training and after training. <br>
 ![DQN](REINFORCE_Result.png) <br>
+<br>
+### Additional Notes <br>
+There seems to be a much higher variance in the rewards collected after each episode for REINFORCE compared to DQN. It also seems to take much longer for the parameters in the neural net to learn the best policy. <br>
 <br>
 <br>
 

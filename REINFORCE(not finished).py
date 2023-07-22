@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import gym
+from collections import deque
+import matplotlib.pyplot as plt
 
 env = gym.make('CartPole-v1')
 
@@ -64,8 +66,13 @@ def calculate_cumulative_rewards(rewards):
     return returns
 
 
-DISCOUNT = 0.99
-LEARNING_RATE = 0.01
+DISCOUNT = 0.995
+LEARNING_RATE = 0.001
+EPISODES = 5000
+NUM_EPS_TO_SOLVE = 100
+AVERAGE_REWARD_TO_SOLVE = 200
+
+scores_last_timesteps = deque([], NUM_EPS_TO_SOLVE)
 
 
 # Usage example
@@ -76,7 +83,28 @@ hidden_size = 64
 policy_net = NeuralNet(input_size, hidden_size, output_size)
 
 
+baseline_rewards = []
 for episode in range(100):
+    done = False
+    state = env.reset()
+    state = torch.from_numpy(np.array(state)).float()
+    state = state.unsqueeze(0)
+    total_rewards = 0
+    while not done:
+        action = policy_net.choose_action(policy_net.apply_softmax(policy_net.forward(state)))
+        new_state, reward, done, _ = env.step(action)
+        total_rewards += reward
+        new_state = torch.from_numpy(np.array(new_state)).float()
+        new_state = new_state.unsqueeze(0)
+        state = new_state
+    baseline_rewards.append(total_rewards)
+
+print(f'Average reward collected before training is {np.mean(np.array(baseline_rewards))}')
+
+
+
+training_rewards = []
+for episode in range(EPISODES):
     done = False
     state = env.reset()
     state = torch.from_numpy(np.array(state)).float()
@@ -85,6 +113,10 @@ for episode in range(100):
     episode_actions = []
     episode_states = [state]
     total_rewards = 0
+    if episode >= NUM_EPS_TO_SOLVE:
+        if (sum(scores_last_timesteps) / NUM_EPS_TO_SOLVE > AVERAGE_REWARD_TO_SOLVE):
+            print("solved after {} episodes".format(episode))
+            break
     while not done:
         action = policy_net.choose_action(policy_net.apply_softmax(policy_net.forward(state)))
         new_state, reward, done, _ = env.step(action)
@@ -108,13 +140,26 @@ for episode in range(100):
             for param, gradient in zip(policy_net.parameters(), gradients):
                 param += LEARNING_RATE * (DISCOUNT ** (i + 1)) * curr_update_reward * gradient
     print(f'Total Reward for Episode {episode} was {total_rewards}')
+    scores_last_timesteps.append(total_rewards)
     #print(f'States were {str(episode_states)}')
     #print(f'Rewards were {str(episode_rewards)}')
     #print(f'Actions were {str(episode_actions)}')
     #print()
+    training_rewards.append(total_rewards)
 
 
 env.close()
+
+plt.plot(range(len(training_rewards)), [np.mean(np.array(baseline_rewards)) for _ in range(len(training_rewards))],
+         linestyle='--', color='red', alpha=0.5, label='Pre- Avg Rewards')
+plt.plot(range(len(training_rewards)), [AVERAGE_REWARD_TO_SOLVE for _ in range(len(training_rewards))],
+         linestyle='--', color="gold", alpha=0.5, label='Target Post- Avg Rewards')
+plt.plot(range(len(training_rewards)), training_rewards, 'b')
+plt.legend(loc="upper left")
+plt.xlabel("Episodes")
+plt.ylabel("Rewards")
+plt.title("Rewards over Episodes during Training")
+plt.show()
 
 
 

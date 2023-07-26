@@ -24,6 +24,7 @@ class Actor(nn.Module):
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
+        x = F.dropout(x, p=0.4)
         x = self.fc3(x)
         return x
 
@@ -43,13 +44,10 @@ class Actor(nn.Module):
         output = self.forward(state)
 
         # Apply softmax to obtain action probabilities
-        softmax_probs = self.apply_softmax(output)
-
-        # Calculate log-probabilities of actions
-        log_probs = torch.log(softmax_probs)
+        softmax_probs = F.log_softmax(output, dim=1)
 
         # Select the log-probability of the chosen action (action is a scalar here)
-        log_prob_selected_action = log_probs[0, action]
+        log_prob_selected_action = softmax_probs[0, action]
 
         # Compute gradients of the selected log-probability with respect to the neural network parameters
         log_prob_selected_action.backward()
@@ -78,20 +76,16 @@ class Critic(nn.Module):
     # forward passing through the Neural Net
     def forward(self, x):
         x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
+        x = F.sigmoid(self.fc2(x))
+        x = F.dropout(x, p=0.4)
         x = self.fc3(x)
         return x
 
-    def get_val_gradient(self, state, action):
+    def get_val_gradient(self, state):
         # Pass state through the neural network
         output = self.forward(state)
 
-        # Calculate log-probabilities of actions
-        val_out = torch.log(output)
-
-        val_out_selected_action = val_out[0, action]
-
-        val_out_selected_action.backward()
+        output.backward()
 
         # Access gradients
         gradients = []
@@ -110,8 +104,8 @@ class Critic(nn.Module):
 
 
 
-HIDDEN_SIZE = 64
-DISCOUNT = 0.995
+HIDDEN_SIZE = 128
+DISCOUNT = 0.99
 EPISODES = 1000
 
 
@@ -119,7 +113,7 @@ input_size = env.observation_space.shape[0]
 output_size = env.action_space.n
 
 actor_net = Actor(input_size, HIDDEN_SIZE, output_size, 0.001)
-critic_net = Critic(input_size, HIDDEN_SIZE, output_size, 0.001)
+critic_net = Critic(input_size + 1, HIDDEN_SIZE, 1, 0.001)
 
 
 for episode in range(EPISODES):
@@ -129,28 +123,33 @@ for episode in range(EPISODES):
     state = state.unsqueeze(0)
     total_rewards = 0
     action = actor_net.choose_action(actor_net.apply_softmax(actor_net.forward(state)))
+    value_to_add = torch.tensor([[action]])
+    state_action = torch.cat((state, value_to_add), dim=1)
 
     while not done:
         new_state, reward, done, _ = env.step(action)
         new_state = torch.from_numpy(np.array(new_state)).float()
         new_state = new_state.unsqueeze(0)
         new_action = actor_net.choose_action(actor_net.apply_softmax(actor_net.forward(new_state)))
+        new_value_to_add = torch.tensor([[new_action]])
+        new_state_action = torch.cat((new_state, new_value_to_add), dim=1)
 
         #updating parameters
         gradient_actor = actor_net.get_log_prob_gradient(state, action)
-        critic_output = critic_net.forward(state)[0][action]
+        critic_output = critic_net.forward(state_action)[0]
         with torch.no_grad():
             for param, gradient in zip(actor_net.parameters(), gradient_actor):
                 param += actor_net.lr * critic_output * gradient
 
-        G_t = reward + DISCOUNT * critic_net.forward(new_state)[0][new_action] - critic_output
-        gradient_critic = critic_net.get_val_gradient(state, action)
+        G_t = reward + DISCOUNT * critic_net.forward(new_state_action)[0] - critic_output
+        gradient_critic = critic_net.get_val_gradient(state_action)
         with torch.no_grad():
             for param, gradient in zip(critic_net.parameters(), gradient_critic):
                 param += critic_net.lr * G_t * gradient
 
         state = new_state
         action = new_action
+        state_action = new_state_action
         total_rewards += reward
 
     print(f'Episode {episode}: {total_rewards}')

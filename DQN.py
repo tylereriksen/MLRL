@@ -193,7 +193,6 @@ for i_episode in range(100):
         if done:
             # If the pole has tipped over, end this episode
             print('Episode {} ended with total reward of {}'.format(i_episode, total_rewards))
-            scores_last_timesteps.append(t + 1)
             train_rewards.append(total_rewards)
             break
 print('Average reward before training was {}'.format(np.mean(np.array(train_rewards))))

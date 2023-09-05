@@ -43,7 +43,7 @@ Generate one episode $S_1, A_1, R_2, S_2, A_2, \cdots, S_T$ <br>
 <br>
 ### Results <br>
 We first initialized a neural net to use for the REINFORCE algorithm and ran it to see the average rewards per episode of this initialized, non-learned net. Next we started the training of the neural net for the REINFORCE algorithm and updated the weights by the equation in the pseudocode above. We stopped the training once it hit an average reward per episode of 200 for the last 100 episodes. The graph below shows the rewards collected per episode during the training process along with the average reward per episode before training and after training. <br>
-![DQN](REINFORCE_Result.png) <br>
+![REINFORCE](REINFORCE_Result.png) <br>
 <br>
 ### Additional Notes <br>
 There seems to be a much higher variance in the rewards collected after each episode for REINFORCE compared to DQN. It also seems to take much longer for the parameters in the neural net to learn the best policy. <br>
@@ -66,8 +66,8 @@ Initialize $s, \theta, w$ at random; sample $a \sim \pi(a|s; \theta)$ <br>
 **End For** <br>
 <br>
 ### Results <br>
-We first initialized a neural net to use for the REINFORCE algorithm and ran it to see the average rewards per episode of this initialized, non-learned net. Next we started the training of the neural net for the REINFORCE algorithm and updated the weights by the equation in the pseudocode above. We stopped the training once it hit an average reward per episode of 200 for the last 100 episodes. The graph below shows the rewards collected per episode during the training process along with the average reward per episode before training and after training. <br>
-![DQN](REINFORCE_Result.png) <br>
+ <br>
+![AC](AC_Result.png) <br>
 <br>
 ### Additional Notes <br>
 There seems to be a much higher variance in the rewards collected after each episode for REINFORCE compared to DQN. It also seems to take much longer for the parameters in the neural net to learn the best policy. <br>

@@ -70,7 +70,9 @@ We first initialized the actor and critic networks to use for the AC algorithm. 
 ![AC](AC_Result.png) <br>
 <br>
 ### Additional Notes <br>
-Actor-Critic seems to work much better when gamma discount is above 0.99 (best if 0.995 or above). There also seems to be a lot more cases where the amount of rewards collected between episodes have a big drop off or gain, more extreme than the graph found in the REINFORCE algorithm. Although in the graph above it appears that the network was able to learn the parameters very quickly, this is often not the case as there is a huge variance in how many episodes it takes to the reach the benchmark of 200 average rewards per episode. However, compared to REINFORCE and DQN, it does appear to be able to reach the maximum reward of 500 more often between different run trials while also appearing to diverge more frequently than the other two. <br>
+Actor-Critic seems to work much better when gamma discount is above 0.99 (best if 0.995 or above). There also seems to be a lot more cases where the amount of rewards collected between episodes have a big drop off or gain, more extreme than the graph found in the REINFORCE algorithm. Although in the graph above it appears that the network was able to learn the parameters very quickly, this is often not the case as there is a huge variance in how many episodes it takes to the reach the benchmark of 200 average rewards per episode. However, compared to REINFORCE and DQN, it does appear to be able to reach the maximum reward of 500 more often between different run trials while also appearing to diverge more frequently than the other two. Below are two other instances of running the Actor-Critic Algorithm script:<br>
+![AC](AC_Result_Other1.png) <br>
+![AC](AC_Result_Other2.png) <br>
 <br>
 <br>
 

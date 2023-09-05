@@ -50,3 +50,27 @@ There seems to be a much higher variance in the rewards collected after each epi
 <br>
 <br>
 
+## Actor-Critic Algorithm <br>
+This is for the Actor-Critic in the AC.py file. Also, in our implementation, although we have tried to implement our Actor-Critic as closely as possible to the pseudocode below, we were not able to get it to work so instead of directly updating parameters in the actor and the critic nets like shown below, we defined a loss function for both and used gradient ascent/descent methods using Adam optimizer to update the parameters. <br> 
+
+### Pseudocode Used for Implementation <br>
+
+Initialize $s, \theta, w$ at random; sample $a \sim \pi(a|s; \theta)$ <br>
+**For** t= $1, T$ **do** <br>
+&nbsp;&nbsp;&nbsp;&nbsp; Sample reward $r_t \sim R(s, a)$ and next state $s' \sim P(s'|s, a)$ <br>
+&nbsp;&nbsp;&nbsp;&nbsp; Then sample the next action $a' \sim \pi(s', a'; \theta)$ <br>
+&nbsp;&nbsp;&nbsp;&nbsp; Update policy parameters: $\theta \leftarrow \theta + \alpha_{\theta} Q(s, a; w) \nabla_{\theta} ln \pi(a|s; \theta)$ <br>
+&nbsp;&nbsp;&nbsp;&nbsp; Compute the correction for action-value at time $t: G_{t:t+1} = r_t + \gamma Q(s', a'; w) - Q(s, a; w)$ <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; and use it to update value function parameters: $w \leftarrow w + \alpha_w G_{t:t+1} \nabla_w Q(s, a; w)$<br>
+&nbsp;&nbsp;&nbsp;&nbsp; Update $a \leftarrow a'$ and $s \leftarrow s'$ <br>
+**End For** <br>
+<br>
+### Results <br>
+We first initialized a neural net to use for the REINFORCE algorithm and ran it to see the average rewards per episode of this initialized, non-learned net. Next we started the training of the neural net for the REINFORCE algorithm and updated the weights by the equation in the pseudocode above. We stopped the training once it hit an average reward per episode of 200 for the last 100 episodes. The graph below shows the rewards collected per episode during the training process along with the average reward per episode before training and after training. <br>
+![DQN](REINFORCE_Result.png) <br>
+<br>
+### Additional Notes <br>
+There seems to be a much higher variance in the rewards collected after each episode for REINFORCE compared to DQN. It also seems to take much longer for the parameters in the neural net to learn the best policy. <br>
+<br>
+<br>
+

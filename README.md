@@ -43,10 +43,36 @@ Generate one episode $S_1, A_1, R_2, S_2, A_2, \cdots, S_T$ <br>
 <br>
 ### Results <br>
 We first initialized a neural net to use for the REINFORCE algorithm and ran it to see the average rewards per episode of this initialized, non-learned net. Next we started the training of the neural net for the REINFORCE algorithm and updated the weights by the equation in the pseudocode above. We stopped the training once it hit an average reward per episode of 200 for the last 100 episodes. The graph below shows the rewards collected per episode during the training process along with the average reward per episode before training and after training. <br>
-![DQN](REINFORCE_Result.png) <br>
+![REINFORCE](REINFORCE_Result.png) <br>
 <br>
 ### Additional Notes <br>
 There seems to be a much higher variance in the rewards collected after each episode for REINFORCE compared to DQN. It also seems to take much longer for the parameters in the neural net to learn the best policy. <br>
+<br>
+<br>
+
+## Actor-Critic Algorithm <br>
+This is for the Actor-Critic in the AC.py file. <br> 
+
+### Pseudocode Used for Implementation <br>
+
+Initialize $s, \theta, w$ at random; sample $a \sim \pi(a|s; \theta)$ <br>
+**For** t= $1, T$ **do** <br>
+&nbsp;&nbsp;&nbsp;&nbsp; Sample reward $r_t \sim R(s, a)$ and next state $s' \sim P(s'|s, a)$ <br>
+&nbsp;&nbsp;&nbsp;&nbsp; Then sample the next action $a' \sim \pi(s', a'; \theta)$ <br>
+&nbsp;&nbsp;&nbsp;&nbsp; Update policy parameters: $\theta \leftarrow \theta + \alpha_{\theta} Q(s, a; w) \nabla_{\theta} ln \pi(a|s; \theta)$ <br>
+&nbsp;&nbsp;&nbsp;&nbsp; Compute the correction for action-value at time $t: G_{t:t+1} = r_t + \gamma Q(s', a'; w) - Q(s, a; w)$ <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; and use it to update value function parameters: $w \leftarrow w + \alpha_w G_{t:t+1} \nabla_w Q(s, a; w)$<br>
+&nbsp;&nbsp;&nbsp;&nbsp; Update $a \leftarrow a'$ and $s \leftarrow s'$ <br>
+**End For** <br>
+<br>
+### Results <br>
+We first initialized the actor and critic networks to use for the AC algorithm. We then ran it to see the average rewards per episode of this initialized, non-learned actor net. Next we started the training of the actor and critic nets for the AC algorithm by calculating the losses and then using the Adam optimizer to calculate the gradients to update the parameters instead of directly updating the network parameters like in the pseudocode above. This was done mostly because we were not able to get a direct translation of the above pseudocode to work so we went this alternate method. We stopped the training once it hit an average reward per episode of 200 for the last 100 episodes. The graph below shows the rewards collected per episode during the training process along with the average reward per episode before training and after training. <br>
+![AC](AC_Result.png) <br>
+<br>
+### Additional Notes <br>
+Actor-Critic seems to work much better when gamma discount is above 0.99 (best if 0.995 or above). There also seems to be a lot more cases where the amount of rewards collected between episodes have a big drop off or gain, more extreme than the graph found in the REINFORCE algorithm. Although in the graph above it appears that the network was able to learn the parameters very quickly, this is often not the case as there is a huge variance in how many episodes it takes to the reach the benchmark of 200 average rewards per episode. However, compared to REINFORCE and DQN, it does appear to be able to reach the maximum reward of 500 more often between different run trials while also appearing to diverge more frequently than the other two. Below are two other instances of running the Actor-Critic Algorithm script:<br>
+![AC](AC_Result_Other1.png) <br>
+![AC](AC_Result_Other2.png) <br>
 <br>
 <br>
 

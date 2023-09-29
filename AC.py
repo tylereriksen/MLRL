@@ -1,9 +1,13 @@
-import gym
+# import necessary packages
+import gymnasium as gym
 import torch
 import numpy as np
 import torch.nn as nn
+import torch.optim as optim
 import matplotlib.pyplot as plt
 from torch.distributions import Categorical
+from collections import deque
+
 
 class Actor(nn.Module):
     def __init__(self, input_dim, output_dim):
@@ -18,6 +22,7 @@ class Actor(nn.Module):
     def forward(self, state):
         return self.network(state)
 
+
 class Critic(nn.Module):
     def __init__(self, input_dim):
         super(Critic, self).__init__()
@@ -30,12 +35,11 @@ class Critic(nn.Module):
     def forward(self, state):
         return self.network(state)
 
-def actor_critic(env, actor, critic, episode, actor_lr=0.01, critic_lr=0.01, gamma=0.99, T=1000):
-    actor.train()
-    critic.train()
 
-    state,_ = env.reset()
-    
+def actor_critic(env, actor, critic, episode, actor_optimizer, critic_optimizer, gamma=0.99, T=1000):
+
+    state, _ = env.reset()
+
     log_prob_actions = []
     values = []
     rewards = []
@@ -50,7 +54,7 @@ def actor_critic(env, actor, critic, episode, actor_lr=0.01, critic_lr=0.01, gam
         next_state, reward, terminated, truncated, _ = env.step(action.item())
         done = terminated or truncated
         episode_reward += reward
-        
+
         log_prob_action = dist.log_prob(action)
         log_prob_actions.append(log_prob_action)
         values.append(value)
@@ -63,20 +67,13 @@ def actor_critic(env, actor, critic, episode, actor_lr=0.01, critic_lr=0.01, gam
 
     actor_loss, critic_loss = compute_loss(log_prob_actions, values, rewards, gamma)
 
-    for param in actor.parameters():
-        if param.grad is not None:
-            param.grad.data.zero_()
+    actor_optimizer.zero_grad()
     actor_loss.backward()
-    
-    for param in actor.parameters():
-        param.data -= actor_lr * param.grad.data
-        
-    for param in critic.parameters():
-        if param.grad is not None:
-            param.grad.data.zero_()
+    actor_optimizer.step()
+
+    critic_optimizer.zero_grad()
     critic_loss.backward()
-    for param in critic.parameters():
-        param.data -= critic_lr * param.grad.data
+    critic_optimizer.step()
     return episode_reward
 
 
@@ -107,17 +104,62 @@ action_dim = env.action_space.n
 actor = Actor(state_dim, action_dim)
 critic = Critic(state_dim)
 
-rewards = []
+actor_optimizer = optim.Adam(actor.parameters(), lr=0.01)
+critic_optimizer = optim.Adam(critic.parameters(), lr=0.01)
 
-for episode in range(1000):
-    episode_reward = actor_critic(env, actor, critic, episode)
-    rewards.append(episode_reward)
 
-    
-plt.figure(figsize=(12,8))
-plt.plot(rewards, label='Reward per episode')
-plt.xlabel('Episode')
-plt.ylabel('Reward')
-plt.title('Rewards over episodes')
-plt.legend()
+NUM_EPISODES = 10_000
+MAX_TIMESTEPS = 1_000
+AVERAGE_REWARD_TO_SOLVE = 200
+NUM_EPS_TO_SOLVE = 100
+GAMMA = 0.995
+
+scores_last_timesteps = deque([], NUM_EPS_TO_SOLVE)
+
+
+# benchmark rewards
+train_rewards = []
+for i_episode in range(100):
+    state, _ = env.reset()
+    state = torch.FloatTensor(state).unsqueeze(0)
+    total_rewards = 0
+    for t in range(MAX_TIMESTEPS):
+        probs = actor(state)
+        dist = Categorical(probs)
+        action = dist.sample()
+        next_state, reward, terminated, truncated, _ = env.step(action.item())
+        done = terminated or truncated
+        total_rewards += reward
+        if done:
+            print('Episode {} ended with total reward of {}'.format(i_episode, total_rewards))
+            train_rewards.append(total_rewards)
+            break
+
+print('Average reward before training was {}'.format(np.mean(np.array(train_rewards))))
+
+AVERAGE_REWARD_TO_SOLVE = max(AVERAGE_REWARD_TO_SOLVE, 2.5 * np.mean(np.array(train_rewards)))
+
+test_rewards = []
+
+for episode in range(NUM_EPISODES):
+    if episode >= NUM_EPS_TO_SOLVE:
+        if (sum(scores_last_timesteps) / NUM_EPS_TO_SOLVE > AVERAGE_REWARD_TO_SOLVE):
+            print("solved after {} episodes".format(episode))
+            break
+    episode_reward = actor_critic(env, actor, critic, episode, actor_optimizer, critic_optimizer, GAMMA, MAX_TIMESTEPS)
+    test_rewards.append(episode_reward)
+    scores_last_timesteps.append(episode_reward)
+
+plt.plot(range(len(test_rewards)), test_rewards, 'b')
+plt.plot(range(len(test_rewards)), [np.mean(np.array(train_rewards)) for _ in range(len(test_rewards))],
+         linestyle='--', color="red", alpha=0.2, label='Pre- Avg Rewards')
+plt.plot(range(len(test_rewards)), [AVERAGE_REWARD_TO_SOLVE for _ in range(len(test_rewards))],
+         linestyle='--', color="gold", alpha=0.5, label='Target Post- Avg Rewards')
+plt.legend(loc="upper left")
+plt.xlabel("Episodes")
+plt.ylabel("Rewards")
+plt.title("Rewards over Episodes during Training")
 plt.show()
+
+
+env.close()

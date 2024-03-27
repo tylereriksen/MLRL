@@ -43,7 +43,7 @@ class ReplayMemory(object):
 
 class DQNAgent():
     
-    def __init__(self, input_dim, n_actions, eps=0.9):
+    def __init__(self, input_dim, n_actions, eps=0.9, lr=0.001):
         self.memory = ReplayMemory()
         
         self.input_dim = input_dim
@@ -55,9 +55,10 @@ class DQNAgent():
         self.target_net = DQN(self.input_dim, self.n_actions)
         
         self.target_net.load_state_dict(self.policy_net.state_dict())
+        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=lr)
         
     
-    def select_action(self, state, eps_decay=0.99, eps_end=0.05):
+    def select_action(self, state, eps_decay=0.99, eps_end=0.01):
         
         sample = random.random()
         
@@ -73,7 +74,7 @@ class DQNAgent():
         return torch.tensor([[env.action_space.sample()]], dtype=torch.long)
     
     
-    def optimize(self, batch_size=128, gamma=0.99):
+    def optimize(self, batch_size=128, gamma=0.995):
         if len(self.memory) < batch_size:
             return
         
@@ -89,7 +90,7 @@ class DQNAgent():
         non_terminal_next_states = torch.cat([s for s in batch.next_state if s is not None])
 
         # get next state values and set terminal states to 0
-        next_state_batch = torch.zeros(batch_size)
+        next_state_batch = torch.zeros(batch_size) # will store the max future q_val of next_state
         with torch.no_grad():
             next_state_batch[non_terminal_states] = self.target_net(
                 non_terminal_next_states).max(1)[0]
@@ -98,7 +99,9 @@ class DQNAgent():
         action_batch = torch.cat(batch.action)
         
        
-        reward_batch = torch.cat(batch.reward)
+        #reward_batch = torch.cat(batch.reward)
+        reward_batch = torch.cat([torch.tensor([reward], dtype=torch.float32) for reward in batch.reward])
+
         
         # Compute Q(s_t, a)
         state_action_values = self.policy_net(state_batch).gather(1, action_batch)
@@ -111,11 +114,11 @@ class DQNAgent():
         loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
 
         # Optimize the model
-        agent.optimizer.zero_grad()
+        self.optimizer.zero_grad()
         loss.backward()
         # In-place gradient clipping
-        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
-        agent.optimizer.step()
+        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 1000)
+        self.optimizer.step()
 
 
 
@@ -165,7 +168,7 @@ def train(env, agent, transitions, episode, T, lr=0.01, gamma=0.99):
 
 
 df = pd.read_csv('gmedata.csv')
-env = gym.make('stocks-v0', df=df, frame_bound=(20,500), window_size=5)
+env = gym.make('stocks-v0', df=df, frame_bound=(20,1000), window_size=5)
 input_dim = env.observation_space.shape[1] * env.observation_space.shape[0]
 n_actions = env.action_space.n
 T = env.unwrapped.frame_bound[1] - env.frame_bound[0]
@@ -173,9 +176,25 @@ T = env.unwrapped.frame_bound[1] - env.frame_bound[0]
 agent = DQNAgent(input_dim, n_actions)
 Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
 
-num_episodes = 300
+num_episodes = 500
+x = []
+y = []
 for episode in range(num_episodes):
     reward, info = train(env, agent, Transition, episode, T)
     print(f"Episode: {episode+1}, Reward: {reward}")
     print("info: ", info)
     print()
+    x.append(episode + 1)
+    y.append(reward)
+
+plt.figure(figsize=(15,6))
+plt.cla()
+env.render_all()
+plt.show()
+
+
+plt.plot(x, y)
+plt.xlabel("Episode")
+plt.ylabel("Rewards")
+plt.grid()
+plt.show()

@@ -11,17 +11,24 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import torch.optim as optim
 
+# Define the variables of the DQN and environment
+
 HIDDEN_LAYER1 = 64
 HIDDEN_LAYER2 = 64
-REPLAY_BUFF_SIZE = 1000
+REPLAY_BUFF_SIZE = 2000
+
 EPSILON = 1.0
 MIN_EPS = 0.01
 EXPLORE_FRAC = 0.3
+
 BATCH_SIZE = 128
+MIN_REPLAY_MEMORY_SIZE = 1000
+
 GAMMA = 0.995
-LEARN_RATE = 0.005
+LEARN_RATE = 0.001
+
 UPDATE_EVERY = 100
-EPISODES = 250
+EPISODES = 800
 
 
 class DQN(nn.Module):
@@ -84,7 +91,7 @@ class DQNAgent():
     
     
     def optimize(self, batch_size=BATCH_SIZE, gamma=GAMMA):
-        if len(self.memory) < batch_size:
+        if len(self.memory) < MIN_REPLAY_MEMORY_SIZE:
             self.t += 1
             return
         
@@ -97,15 +104,15 @@ class DQNAgent():
         non_terminal_states = torch.tensor(tuple(map(lambda s: s is not None,
                                                 batch.next_state)), dtype=torch.bool)
         # get non terminal next states
-        non_terminal_next_states = torch.cat([s for s in batch.next_state if s is not None])
+        non_terminal_next_states = torch.cat([s for s in batch.next_state if s is not None]) # new_current_states
 
         # get next state values and set terminal states to 0
-        next_state_batch = torch.zeros(batch_size) # will store the max future q_val of next_state
+        next_state_batch = torch.zeros(batch_size) # future_qs_list
         with torch.no_grad():
             next_state_batch[non_terminal_states] = self.target_net(
                 non_terminal_next_states).max(1)[0]
         
-        state_batch = torch.cat(batch.state)
+        state_batch = torch.cat(batch.state) # current_states
         action_batch = torch.cat(batch.action)
         
        
@@ -114,7 +121,7 @@ class DQNAgent():
 
         
         # Compute Q(s_t, a)
-        state_action_values = self.policy_net(state_batch).gather(1, action_batch)
+        state_action_values = self.policy_net(state_batch).gather(1, action_batch) # current_qs_list
 
         
         # Compute the expected Q values
